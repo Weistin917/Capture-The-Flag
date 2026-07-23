@@ -2,7 +2,6 @@
 
 #include <nlohmann/json.hpp>
 #include <iostream>
-#include <vector>
 #include <cstring>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -80,24 +79,14 @@ void run_server_discovery(const std::string& server_name, int tcp_port) {
 // ---------------------------------------------------------------------------
 // CLIENT SIDE
 // ---------------------------------------------------------------------------
-namespace {
-struct ServerEntry {
-    std::string ip;
-    std::string name;
-    int tcp_port;
-    std::string state;
-    int players;
-};
-}
+std::vector<ServerEntry> discover_once() {
+    std::vector<ServerEntry> found;
 
-void run_client_discovery() {
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) { perror("[Discovery] socket"); return; }
+    if (sockfd < 0) { perror("[Discovery] socket"); return found; }
 
     int broadcast_enable = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable)) < 0) {
-        perror("[Discovery] SO_BROADCAST");
-    }
+    setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable));
 
     sockaddr_in bcast_addr{};
     bcast_addr.sin_family = AF_INET;
@@ -109,12 +98,11 @@ void run_client_discovery() {
     req["v"] = PROTOCOL_VERSION;
     std::string out = req.dump();
 
-    std::cout << "[Discovery] Broadcasting discover...\n";
     if (sendto(sockfd, out.c_str(), out.size(), 0,
                (sockaddr*)&bcast_addr, sizeof(bcast_addr)) < 0) {
         perror("[Discovery] sendto");
         close(sockfd);
-        return;
+        return found;
     }
 
     timeval tv{};
@@ -122,7 +110,6 @@ void run_client_discovery() {
     tv.tv_usec = (DISCOVERY_TIMEOUT_MS % 1000) * 1000;
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    std::vector<ServerEntry> found;
     char buffer[BUF_SIZE];
 
     while (true) {
@@ -130,7 +117,7 @@ void run_client_discovery() {
         socklen_t from_len = sizeof(from);
         int bytes = recvfrom(sockfd, buffer, sizeof(buffer) - 1, 0,
                               (sockaddr*)&from, &from_len);
-        if (bytes <= 0) break; // timeout hit, stop collecting
+        if (bytes <= 0) break; // timeout hit, this round is done
 
         buffer[bytes] = '\0';
         json resp;
@@ -151,27 +138,9 @@ void run_client_discovery() {
         entry.tcp_port = resp.value("tcp_port", 0);
         entry.state = resp.value("state", "unknown");
         entry.players = resp.value("players", 0);
-
-        bool duplicate = false;
-        for (const auto& e : found) {
-            if (e.ip == entry.ip && e.tcp_port == entry.tcp_port) { duplicate = true; break; }
-        }
-        if (!duplicate) found.push_back(entry);
+        found.push_back(entry);
     }
 
     close(sockfd);
-
-    if (found.empty()) {
-        std::cout << "[Discovery] No servers found.\n";
-        return;
-    }
-
-    std::cout << "\n=== Servers found ===\n";
-    for (size_t i = 0; i < found.size(); i++) {
-        const auto& e = found[i];
-        std::cout << "  [" << i << "] " << e.name << "  " << e.ip << ":" << e.tcp_port
-                   << "  (" << e.state << ", " << e.players << " players)\n";
-    }
-    // TODO: manual IP fallback entry (protocol 1.3 requires it, wiring it up
-    // once we get to the actual TCP connect step).
+    return found;
 }

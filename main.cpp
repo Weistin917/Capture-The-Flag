@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     if (args.mode == Mode::SERVER) {
         server(args.name, args.port);
     } else {
-        client();
+        client(args.name);
     }
 
     return 0;

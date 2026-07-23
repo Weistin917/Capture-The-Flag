@@ -13,6 +13,8 @@ add_executable(ctf
     coms/discovery.cpp
     coms/server.cpp
     coms/client.cpp
+    coms/tcp_server.cpp
+    coms/tcp_client.cpp
 )
 
 target_include_directories(ctf PRIVATE ${CMAKE_SOURCE_DIR})
