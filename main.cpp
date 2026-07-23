@@ -1,5 +1,6 @@
 #include "utils/args.hpp"
-#include "coms/discovery.hpp"
+#include "coms/server.hpp"
+#include "coms/client.hpp"
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -11,9 +12,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (args.mode == Mode::SERVER) {
-        run_server_discovery(args.name, args.port);
+        server(args.name, args.port);
     } else {
-        run_client_discovery();
+        client();
     }
 
     return 0;
